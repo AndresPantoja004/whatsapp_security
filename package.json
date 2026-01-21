@@ -1,0 +1,12 @@
+{
+  "name": "whatsapp_security",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "server": "node server.js",
+    "client": "node client.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
