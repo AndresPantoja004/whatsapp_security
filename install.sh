@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo apt install node npm
+sudo apt install nodejs npm
 npm install
 
 chmod +x bin/chat-server
