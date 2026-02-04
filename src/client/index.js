@@ -12,7 +12,7 @@ import {
   fingerprint,
   b64,
   unb64,
-} from "./crypto.js";
+} from "../../lib/crypto";
 
 // ===== Estado global =====
 let joined = false;
