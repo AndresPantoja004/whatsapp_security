@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Directorio raíz del proyecto
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_PATH="$(readlink -f "$0")"
+ROOT_DIR="$(dirname "$SCRIPT_PATH")/.."
 
-# Ejecutar cliente
-node "$ROOT_DIR/src/client/index.js"
+exec /usr/bin/env node "$ROOT_DIR/src/client/index.js"

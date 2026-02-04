@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Directorio raíz del proyecto
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Ruta REAL del script (resuelve symlinks)
+SCRIPT_PATH="$(readlink -f "$0")"
+ROOT_DIR="$(dirname "$SCRIPT_PATH")/.."
 
-# Ejecutar servidor
-node "$ROOT_DIR/src/server/index.js"
+exec /usr/bin/env node "$ROOT_DIR/src/server/index.js"
