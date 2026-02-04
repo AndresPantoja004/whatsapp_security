@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Directorio raíz del proyecto
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Ejecutar cliente
+node "$ROOT_DIR/src/client/index.js"
