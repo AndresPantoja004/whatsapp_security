@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "server": "node server.js",
-    "client": "node client.js"
+    "server": "node src/server/index.js",
+    "client": "node src/client/index.js"
   },
   "dependencies": {
     "ws": "^8.18.0"
