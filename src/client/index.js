@@ -14,7 +14,24 @@ import {
   unb64,
 } from "../../lib/crypto.js";
 
-// ===== Estado global =====
+/* ============================
+   🎨 TERMINAL STYLING
+============================ */
+
+const reset = "\x1b[0m";
+const bold = t => `\x1b[1m${t}${reset}`;
+const dim = t => `\x1b[2m${t}${reset}`;
+
+const green = t => `\x1b[32m${t}${reset}`;
+const red = t => `\x1b[31m${t}${reset}`;
+const yellow = t => `\x1b[33m${t}${reset}`;
+const cyan = t => `\x1b[36m${t}${reset}`;
+const magenta = t => `\x1b[35m${t}${reset}`;
+
+/* ============================
+   🧠 ESTADO GLOBAL
+============================ */
+
 let joined = false;
 let handshakeSent = false;
 
@@ -24,7 +41,7 @@ const rl = readline.createInterface({
 });
 
 function ask(q) {
-  return new Promise((res) => rl.question(q, res));
+  return new Promise(res => rl.question(q, res));
 }
 
 function now() {
@@ -38,27 +55,50 @@ function buildAad(room, from, to, counter) {
   );
 }
 
+/* ============================
+   🚀 MAIN
+============================ */
+
 async function main() {
+
+  console.clear();
+
+  console.log(green(bold(`
+███████╗███████╗ ██████╗██╗   ██╗██████╗ ███████╗
+██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔════╝
+███████╗█████╗  ██║     ██║   ██║██████╔╝█████╗  
+╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██╔══╝  
+███████║███████╗╚██████╗╚██████╔╝██║  ██║███████╗
+╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝
+
+        E N D - T O - E N D   E N C R Y P T I O N
+        AES-256-GCM · HMAC-SHA256 · ECDH
+  `)));
+
   const serverUrl =
     process.env.SERVER ||
-    (await ask("WS Server (e.g. ws://192.168.1.10:8080): "));
+    (await ask(cyan("WS Server  ➜ ")));
+
   const room =
     process.env.ROOM ||
-    (await ask("Room id (e.g. project): "));
+    (await ask(cyan("Room ID    ➜ ")));
+
   const me =
     process.env.ME ||
-    (await ask("Your id (e.g. darwin): "));
+    (await ask(cyan("Your ID    ➜ ")));
+
   const peer =
     process.env.PEER ||
-    (await ask("Peer id (e.g. john): "));
+    (await ask(cyan("Peer ID    ➜ ")));
+
+  console.log(dim("\n[ Initializing cryptographic context ]\n"));
 
   const curve = pickEcdhCurve();
   const { ecdh, publicKey } = genKeyPairECDH(curve);
 
-  console.log(`\n[${now()}] Using curve: ${curve}`);
-  console.log(
-    `[${now()}] Your public key fingerprint: ${fingerprint(publicKey)}\n`
-  );
+  console.log(green(`[✔] Curve: ${bold(curve)}`));
+  console.log(green(`[✔] Public key fingerprint:`));
+  console.log(magenta(`    ${fingerprint(publicKey)}\n`));
 
   const ws = new WebSocket(serverUrl);
 
@@ -66,45 +106,38 @@ async function main() {
   let sendCounter = 0;
   let recvCounter = 0;
   let peerHandshakeReceived = false;
-  let pendingMessages = []; //  Cola de mensajes recibidos antes de establecer sesión
+  let pendingMessages = [];
 
-  // Función para enviar handshake
   function sendHandshake(to) {
     ws.send(
       JSON.stringify({
         type: "handshake",
         room,
         from: me,
-        to: to,
+        to,
         payload: {
           curve,
           pub: b64(publicKey),
         },
       })
     );
-    console.log(`[${now()}] Handshake sent to '${to}'.`);
+    console.log(yellow(`[→] Handshake sent to ${bold(to)}`));
   }
 
-  // Procesar mensajes pendientes después de establecer sesión
   function processPendingMessages() {
     if (pendingMessages.length > 0) {
-      console.log(`[${now()}] Processing ${pendingMessages.length} pending messages...`);
-      pendingMessages.forEach(msg => {
-        handleEncryptedMessage(msg);
-      });
+      console.log(dim(`[ Processing ${pendingMessages.length} queued messages ]`));
+      pendingMessages.forEach(msg => handleEncryptedMessage(msg));
       pendingMessages = [];
     }
   }
 
-  //  Función para manejar mensajes cifrados
   function handleEncryptedMessage(msg) {
-    if (!session) {
-      console.log(`[${now()}] Message queued, session not ready yet.`);
-      return;
-    }
+    if (!session) return;
 
     const { from, payload } = msg;
     const { iv, ct, tag, hmac, counter } = payload || {};
+
     const ivB = unb64(iv);
     const ctB = unb64(ct);
     const tagB = unb64(tag);
@@ -115,32 +148,33 @@ async function main() {
     const macExpected = hmacSha256(session.kMac, macData);
 
     if (!timingSafeEq(macExpected, hmacB)) {
-      console.log(`\n[${now()}] ⚠️ HMAC verification FAILED.`);
+      console.log(red(`
+[ SECURITY ALERT ]
+Message authentication failed.
+Possible tampering detected.
+`));
       return;
     }
 
     try {
       const text = decryptAesGcm(session.kEnc, ivB, ctB, tagB, aad);
       recvCounter++;
-      console.log(`\n[${from}] ${text}`);
+
+      console.log(`
+${bold(cyan(from))} ${dim(`[msg #${recvCounter}]`)}
+  ${text}
+`);
     } catch (e) {
-      console.log(`\n[${now()}] ⚠️ Decrypt/auth failed: ${e.message}`);
+      console.log(red(`[ Decryption failed ] ${e.message}`));
     }
   }
 
-  // ===== Conexión =====
   ws.on("open", () => {
-    ws.send(
-      JSON.stringify({
-        type: "join",
-        room,
-        from: me,
-      })
-    );
+    console.log(green("\n[ Connected to server ]"));
+    ws.send(JSON.stringify({ type: "join", room, from: me }));
   });
 
-  // ===== Mensajes =====
-  ws.on("message", async (raw) => {
+  ws.on("message", async raw => {
     let msg;
     try {
       msg = JSON.parse(raw.toString("utf8"));
@@ -151,159 +185,114 @@ async function main() {
     const { type, from, to, payload } = msg || {};
     if (to && to !== me) return;
 
-    // ---- Joined ----
     if (type === "joined") {
       joined = true;
-
       if (!handshakeSent) {
         sendHandshake(peer);
         handshakeSent = true;
       }
-      
-      // Solicitar handshake del peer si no lo hemos recibido
-      // Esto ayuda cuando nos conectamos después que el otro cliente
-      setTimeout(() => {
-        if (!peerHandshakeReceived) {
-          console.log(`[${now()}] Requesting handshake from peer...`);
-          ws.send(JSON.stringify({
-            type: "request_handshake",
-            room,
-            from: me,
-            to: peer
-          }));
-        }
-      }, 500);
     }
 
-    // ---- Request handshake ----
-    if (type === "request_handshake") {
-      console.log(`[${now()}] Peer '${from}' requests handshake. Resending...`);
-      sendHandshake(from);
-    }
-
-    // ---- Handshake ----
     if (type === "handshake") {
-      if (peerHandshakeReceived) {
-        console.log(`[${now()}] Duplicate handshake from '${from}' ignored.`);
-        return;
-      }
+
+      if (peerHandshakeReceived) return;
 
       const otherCurve = payload?.curve;
       const otherPub = unb64(payload?.pub || "");
 
-      console.log(`\n[${now()}] Handshake received from '${from}'.`);
-      console.log(
-        `[${now()}] Peer public key fingerprint: ${fingerprint(otherPub)}`
-      );
-      console.log(
-        `[${now()}] IMPORTANT: verify this fingerprint with your peer via another channel.\n`
-      );
+      console.log(green(`\n[✔] Handshake received from ${bold(from)}`));
+      console.log(cyan(`[🔎] Peer fingerprint:`));
+      console.log(magenta(`    ${fingerprint(otherPub)}\n`));
+      console.log(yellow("[!] Verify fingerprint externally\n"));
 
       if (otherCurve !== curve) {
-        console.log(
-          `[${now()}] Curve mismatch! mine=${curve}, peer=${otherCurve}. Abort.`
-        );
+        console.log(red("[ Curve mismatch detected. Abort. ]"));
         return;
       }
 
-      // Responder con handshake si aún no lo hemos enviado
-      if (!handshakeSent) {
-        sendHandshake(from);
-        handshakeSent = true;
-      }
-
-      // Derivar las claves de sesión
       const shared = computeSharedSecret(ecdh, otherPub);
-      // Ordenar IDs alfabéticamente para contexto simétrico
       const [id1, id2] = [me, from].sort();
       const context = `room:${room}|peer1:${id1}|peer2:${id2}|curve:${curve}`;
       const { kEnc, kMac } = deriveSessionKeys(shared, context);
+
       session = { kEnc, kMac };
       peerHandshakeReceived = true;
 
-      console.log(`[${now()}] Session keys derived ✅`);
-      console.log(
-        `[${now()}] You can start chatting. Type and press Enter.\n`
-      );
+      console.log(green(`
+╔════════ SESSION ESTABLISHED ════════╗
+║  Encryption : AES-256-GCM          ║
+║  Integrity  : HMAC-SHA256          ║
+║  Forward Secrecy : Enabled         ║
+╚═════════════════════════════════════╝
+`));
 
-      //  Procesar mensajes que llegaron antes de la sesión
       processPendingMessages();
-
       promptLoop();
     }
 
-    // ---- Mensajes cifrados ----
     if (type === "msg") {
       if (!session) {
-        console.log(`[${now()}] Received message but session not established yet.`);
-        //  Encolar el mensaje para procesarlo después
         pendingMessages.push(msg);
         return;
       }
-
       handleEncryptedMessage(msg);
     }
   });
 
   ws.on("close", () => {
-    console.log(`\n[${now()}] Disconnected.`);
+    console.log(dim("\n[ Connection closed ]"));
     process.exit(0);
   });
 
-  ws.on("error", (e) => {
-    console.error(`[${now()}] WS error:`, e.message);
+  ws.on("error", e => {
+    console.log(red(`[ WS ERROR ] ${e.message}`));
   });
 
-  // ===== Entrada de usuario =====
   async function promptLoop() {
     if (promptLoop.running) return;
     promptLoop.running = true;
 
     while (ws.readyState === ws.OPEN) {
-      const line = await ask("> ");
-      if (!line) continue;
 
+      const line = await ask(green("secure@node ➜ "));
+
+      if (!line) continue;
       if (line === "/quit") {
         ws.close();
         break;
       }
 
       if (!session) {
-        console.log("⏳ Secure session not ready yet...");
+        console.log(yellow("[ Secure session not ready ]"));
         continue;
       }
 
       sendCounter++;
+
       const aad = buildAad(room, me, peer, sendCounter);
-      const { iv, ct, tag } = encryptAesGcm(
-        session.kEnc,
-        line,
-        aad
-      );
+      const { iv, ct, tag } = encryptAesGcm(session.kEnc, line, aad);
 
       const macData = Buffer.concat([aad, iv, ct, tag]);
       const mac = hmacSha256(session.kMac, macData);
 
-      ws.send(
-        JSON.stringify({
-          type: "msg",
-          room,
-          from: me,
-          to: peer,
-          payload: {
-            counter: sendCounter,
-            iv: b64(iv),
-            ct: b64(ct),
-            tag: b64(tag),
-            hmac: b64(mac),
-          },
-        })
-      );
+      ws.send(JSON.stringify({
+        type: "msg",
+        room,
+        from: me,
+        to: peer,
+        payload: {
+          counter: sendCounter,
+          iv: b64(iv),
+          ct: b64(ct),
+          tag: b64(tag),
+          hmac: b64(mac),
+        },
+      }));
     }
   }
 }
 
-main().catch((e) => {
-  console.error("Fatal:", e);
+main().catch(e => {
+  console.error(red("Fatal error:"), e);
   process.exit(1);
 });
